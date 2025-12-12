@@ -276,9 +276,99 @@
             font-weight: bold;
         }
 
+        /* Показывать/скрывать элементы на разных устройствах */
+        .desktop-only {
+            display: block;
+        }
+
+        .mobile-only {
+            display: none;
+        }
+
+        /* Стили для мобильных карточек */
+        .mobile-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .record-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid #667eea;
+        }
+
+        .record-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .record-date {
+            font-size: 16px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .record-card-body {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .record-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .record-label {
+            font-size: 13px;
+            color: #6c757d;
+            font-weight: 500;
+        }
+
+        .record-value {
+            font-size: 15px;
+            font-weight: 600;
+            color: #212529;
+            text-align: right;
+        }
+
+        .record-value.highlight {
+            color: #dc3545;
+            font-size: 16px;
+        }
+
+        .record-note {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #495057;
+            font-style: italic;
+        }
+
+        .records-section {
+            margin-bottom: 30px;
+        }
+
         @media (max-width: 768px) {
             body {
                 padding: 5px;
+            }
+
+            .desktop-only {
+                display: none !important;
+            }
+
+            .mobile-only {
+                display: flex !important;
             }
 
             .header {
@@ -328,21 +418,16 @@
                 font-size: 28px;
             }
 
-            table {
-                font-size: 13px;
-            }
-
-            th, td {
-                padding: 10px 8px;
-            }
-
-            .table-container {
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-            }
-
             canvas {
                 max-height: 300px;
+            }
+
+            .chart-container {
+                padding: 20px 15px;
+            }
+
+            .chart-container h3 {
+                font-size: 16px;
             }
         }
 
@@ -359,12 +444,12 @@
                 font-size: 24px;
             }
 
-            table {
-                font-size: 12px;
+            .record-card {
+                padding: 15px;
             }
 
-            th, td {
-                padding: 8px 5px;
+            .record-value {
+                font-size: 14px;
             }
         }
     </style>
@@ -467,24 +552,34 @@
                 <canvas id="lossChart"></canvas>
             </div>
 
-            <!-- Таблица записей -->
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Дата</th>
-                            <th>Сумма наличных (₽)</th>
-                            <th>Снято со счёта (₽)</th>
-                            <th>Комиссия (%)</th>
-                            <th>Потери (₽)</th>
-                            <th>Примечание</th>
-                            <th>Действия</th>
-                        </tr>
-                    </thead>
-                    <tbody id="recordsTable">
-                        <!-- Записи будут добавляться сюда -->
-                    </tbody>
-                </table>
+            <!-- Таблица записей / Карточки для мобильных -->
+            <div class="records-section">
+                <h2 style="color: #495057; margin-bottom: 20px;">📋 История операций</h2>
+                
+                <!-- Десктоп таблица -->
+                <div class="table-container desktop-only">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Дата</th>
+                                <th>Сумма наличных (₽)</th>
+                                <th>Снято со счёта (₽)</th>
+                                <th>Комиссия (%)</th>
+                                <th>Потери (₽)</th>
+                                <th>Примечание</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recordsTable">
+                            <!-- Записи будут добавляться сюда -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Мобильные карточки -->
+                <div class="mobile-cards mobile-only" id="mobileCards">
+                    <!-- Карточки будут добавляться сюда -->
+                </div>
             </div>
         </div>
     </div>
@@ -599,12 +694,12 @@
 
         // Обновление таблицы
         function updateTable() {
-            const tbody = document.getElementById('recordsTable');
             const filtered = getFilteredRecords();
             const sorted = filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
 
+            // Обновление десктоп таблицы
+            const tbody = document.getElementById('recordsTable');
             tbody.innerHTML = sorted.map(record => {
-                // Для старых записей пересчитываем, если нет totalFromAccount
                 const totalFromAccount = record.totalFromAccount || (record.amount / (1 - record.commission / 100));
                 const loss = record.loss || (totalFromAccount - record.amount);
                 
@@ -619,6 +714,53 @@
                     <td><button class="btn btn-delete" onclick="deleteRecord(${record.id})">Удалить</button></td>
                 </tr>
             `}).join('');
+
+            // Обновление мобильных карточек
+            const mobileCards = document.getElementById('mobileCards');
+            mobileCards.innerHTML = sorted.map(record => {
+                const totalFromAccount = record.totalFromAccount || (record.amount / (1 - record.commission / 100));
+                const loss = record.loss || (totalFromAccount - record.amount);
+                
+                return `
+                <div class="record-card">
+                    <div class="record-card-header">
+                        <div class="record-date">📅 ${new Date(record.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                    </div>
+                    <div class="record-card-body">
+                        <div class="record-row">
+                            <span class="record-label">💵 Выдано наличных:</span>
+                            <span class="record-value">${record.amount.toLocaleString('ru-RU', {minimumFractionDigits: 2})} ₽</span>
+                        </div>
+                        <div class="record-row">
+                            <span class="record-label">🏦 Снято со счёта:</span>
+                            <span class="record-value" style="color: #6c757d;">${totalFromAccount.toLocaleString('ru-RU', {minimumFractionDigits: 2})} ₽</span>
+                        </div>
+                        <div class="record-row">
+                            <span class="record-label">📊 Комиссия:</span>
+                            <span class="record-value">${record.commission}%</span>
+                        </div>
+                        <div class="record-row">
+                            <span class="record-label">💸 Потери:</span>
+                            <span class="record-value highlight">${loss.toLocaleString('ru-RU', {minimumFractionDigits: 2})} ₽</span>
+                        </div>
+                        ${record.note ? `<div class="record-note">📝 ${record.note}</div>` : ''}
+                        <button class="btn btn-delete" onclick="deleteRecord(${record.id})" style="margin-top: 10px; width: 100%;">Удалить запись</button>
+                    </div>
+                </div>
+            `}).join('');
+
+            // Показать сообщение если нет записей
+            if (sorted.length === 0) {
+                const emptyMessage = `
+                    <div style="text-align: center; padding: 40px; color: #6c757d;">
+                        <p style="font-size: 18px; margin-bottom: 10px;">📭</p>
+                        <p>Пока нет записей</p>
+                        <p style="font-size: 14px; margin-top: 5px;">Добавьте первую операцию выше</p>
+                    </div>
+                `;
+                tbody.innerHTML = `<tr><td colspan="7">${emptyMessage}</td></tr>`;
+                mobileCards.innerHTML = emptyMessage;
+            }
         }
 
         // Обновление аналитики
