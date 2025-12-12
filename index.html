@@ -180,7 +180,7 @@
 
         table {
             width: 100%;
-            min-width: 600px;
+            min-width: 700px;
             border-collapse: collapse;
             background: white;
         }
@@ -388,7 +388,8 @@
                     <div class="setting-item">
                         <label>Информация:</label>
                         <p style="font-size: 13px; color: #6c757d; margin-top: 10px;">
-                            Укажите процент комиссии, которую взимает банк при выводе безналичных средств в наличные
+                            Укажите процент комиссии банка. Калькулятор автоматически рассчитает, сколько реально нужно снять со счёта, чтобы получить нужную сумму наличных. <br><br>
+                            <strong>Пример:</strong> При комиссии 17% для получения 80 000₽ наличными нужно снять 96 386₽, потери составят 16 386₽
                         </p>
                     </div>
                 </div>
@@ -434,9 +435,14 @@
             <!-- Аналитика -->
             <div class="analytics-section" id="analyticsSection">
                 <div class="stat-card">
-                    <h3>Всего выдано наличных</h3>
+                    <h3>Выдано наличных</h3>
                     <div class="value" id="totalCash">0 ₽</div>
                     <div class="subvalue">За выбранный период</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Снято со счёта</h3>
+                    <div class="value" id="totalFromAccount">0 ₽</div>
+                    <div class="subvalue">Включая комиссию</div>
                 </div>
                 <div class="stat-card">
                     <h3>Потери от обналичивания</h3>
@@ -468,6 +474,7 @@
                         <tr>
                             <th>Дата</th>
                             <th>Сумма наличных (₽)</th>
+                            <th>Снято со счёта (₽)</th>
                             <th>Комиссия (%)</th>
                             <th>Потери (₽)</th>
                             <th>Примечание</th>
@@ -523,7 +530,10 @@
                 return;
             }
 
-            const loss = (amount * commission) / 100;
+            // Правильный расчёт: сколько нужно снять со счёта, чтобы получить нужную сумму наличных
+            // Формула: amount / (1 - commission/100)
+            const totalFromAccount = amount / (1 - commission / 100);
+            const loss = totalFromAccount - amount;
 
             records.push({
                 id: Date.now(),
@@ -531,6 +541,7 @@
                 amount: amount,
                 commission: commission,
                 loss: loss,
+                totalFromAccount: totalFromAccount,
                 note: note
             });
 
@@ -592,29 +603,48 @@
             const filtered = getFilteredRecords();
             const sorted = filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-            tbody.innerHTML = sorted.map(record => `
+            tbody.innerHTML = sorted.map(record => {
+                // Для старых записей пересчитываем, если нет totalFromAccount
+                const totalFromAccount = record.totalFromAccount || (record.amount / (1 - record.commission / 100));
+                const loss = record.loss || (totalFromAccount - record.amount);
+                
+                return `
                 <tr>
                     <td>${new Date(record.date).toLocaleDateString('ru-RU')}</td>
                     <td>${record.amount.toLocaleString('ru-RU', {minimumFractionDigits: 2})} ₽</td>
+                    <td style="color: #6c757d;">${totalFromAccount.toLocaleString('ru-RU', {minimumFractionDigits: 2})} ₽</td>
                     <td>${record.commission}%</td>
-                    <td class="highlight">${record.loss.toLocaleString('ru-RU', {minimumFractionDigits: 2})} ₽</td>
+                    <td class="highlight">${loss.toLocaleString('ru-RU', {minimumFractionDigits: 2})} ₽</td>
                     <td>${record.note || '-'}</td>
                     <td><button class="btn btn-delete" onclick="deleteRecord(${record.id})">Удалить</button></td>
                 </tr>
-            `).join('');
+            `}).join('');
         }
 
         // Обновление аналитики
         function updateAnalytics() {
             const filtered = getFilteredRecords();
             const totalCash = filtered.reduce((sum, r) => sum + r.amount, 0);
-            const totalLoss = filtered.reduce((sum, r) => sum + r.loss, 0);
+            
+            // Пересчитываем для старых записей
+            const totalFromAccount = filtered.reduce((sum, r) => {
+                const fromAccount = r.totalFromAccount || (r.amount / (1 - r.commission / 100));
+                return sum + fromAccount;
+            }, 0);
+            
+            const totalLoss = filtered.reduce((sum, r) => {
+                const loss = r.loss || ((r.amount / (1 - r.commission / 100)) - r.amount);
+                return sum + loss;
+            }, 0);
+            
             const avgCommission = filtered.length > 0 
                 ? filtered.reduce((sum, r) => sum + r.commission, 0) / filtered.length 
                 : 0;
 
             document.getElementById('totalCash').textContent = 
                 totalCash.toLocaleString('ru-RU', {minimumFractionDigits: 2}) + ' ₽';
+            document.getElementById('totalFromAccount').textContent = 
+                totalFromAccount.toLocaleString('ru-RU', {minimumFractionDigits: 2}) + ' ₽';
             document.getElementById('totalLoss').textContent = 
                 totalLoss.toLocaleString('ru-RU', {minimumFractionDigits: 2}) + ' ₽';
             document.getElementById('lossPercent').textContent = 
